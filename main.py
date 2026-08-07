@@ -19,10 +19,13 @@ notes = [
 
 @app.get("/notes")
 def read_notes(search: str | None = None, limit: int | None = None):
+    result = notes
     if search:
         result = [note for note in notes if search.lower() in note["title"].lower()]
-    if limit:
+    if limit and limit >= 1:
         result = result[:limit]
+    elif limit and limit < 1:
+        raise HTTPException(status_code=400, detail="Limit must be positive")
     return result
 
 @app.get("/notes/{note_id}")
@@ -30,7 +33,7 @@ def read_note(note_id: int):
     for note in notes:
         if note["id"] == note_id:
             return note
-    return "Note not found"
+    raise HTTPException(status_code=404, detail="Note not found")
         
 
 
