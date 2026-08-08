@@ -12,3 +12,4 @@ app.include_router(notes_router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", reload=True)
+
