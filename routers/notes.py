@@ -1,114 +1,23 @@
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, ValidationError
-import json
-from pathlib import Path
-from uuid import uuid4
+
+
+from schemas.note import Note, NoteCreate, NoteUpdate
+from services.file_service import read_file, write_file
+from services.image_service import upload_image, delete_image, PATH_TO_IMAGES
+
 
 router = APIRouter(
     prefix="/notes",
     tags=["Заметки"],
 )
 
-path_to_file = "notes.json"
-    
-path_to_images = Path("images")
-path_to_images.mkdir(exist_ok=True)
-
-
-def upload_image(file: UploadFile):
-    if file.content_type not in {
-        "image/jpeg",
-        "image/png"
-    }:
-        raise HTTPException(
-            status_code=400,
-            detail="Файл должен быть JPEG или PNG"
-        )
-    
-    extention = ".jpg" if file.content_type == "image/jpeg" else ".png"
-    file.filename = f"{uuid4()}.{extention}"
-
-    path = path_to_images / file.filename
-
-    with open(path, "wb") as buffer:
-        buffer.write(file.file.read())
-
-    return file.filename
-
-
-def read_file(path):
-    try:
-        with open(path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-            if not isinstance(data, list):
-                raise HTTPException(
-                    status_code=500,
-                    detail="JSON должен содержать список заметок"
-                )
-
-            return [Note(**note) for note in data]
-        
-    except FileNotFoundError:
-        return []
-    
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500,
-            detail="Файл JSON поврежден"
-        )
-    
-    except ValidationError:
-        raise HTTPException(
-            status_code=500,
-            detail="Данные хранятся в неправильном формате"
-        )
- 
-def write_file(path, data):
-    data = [note.model_dump() for note in data]
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
-
-class Note(BaseModel):
-    id: int
-    title: str = Field(
-        min_length=1,
-        max_length=100
-    )
-    text: str = Field(
-        min_length=1,
-        max_length=5000
-    )
-    image: str | None = None
-
-class NoteCreate(BaseModel):
-    title: str = Field(
-        min_length=1,
-        max_length=100
-    )
-    text: str = Field(
-        min_length=1,
-        max_length=5000
-    )
-
-
-class NoteUpdate(BaseModel):
-    title: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100
-    )
-    text: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=5000
-    )
+PATH_TO_FILE = "notes.json"
 
 
 @router.get("/", response_model=list[Note])
 def read_notes(search: str | None = None, limit: int | None = None):
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
     result = notes
 
     if search:
@@ -122,7 +31,7 @@ def read_notes(search: str | None = None, limit: int | None = None):
 
 @router.get("/{note_id}", response_model=Note)
 def read_note(note_id: int):
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     for note in notes:
         if note.id == note_id:
@@ -132,7 +41,7 @@ def read_note(note_id: int):
 
 @router.get("/{note_id}/image")
 def get_note_image(note_id: int):
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     for note in notes:
         if note.id == note_id:
@@ -143,7 +52,7 @@ def get_note_image(note_id: int):
                     detail="У заметки нет изображения"
                 )
             
-            path = path_to_images / note.image
+            path = PATH_TO_IMAGES / note.image
 
             if not path.exists():
                 raise HTTPException(
@@ -164,7 +73,7 @@ def create_note(
 
     note = NoteCreate(title=title, text=text)
 
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     try:
         last_id = notes[-1].id
@@ -184,7 +93,7 @@ def create_note(
     )
     
     notes.append(new_note)
-    write_file(path_to_file, notes)
+    write_file(PATH_TO_FILE, notes)
 
     return new_note
 
@@ -197,7 +106,7 @@ def update_note(note_id: int,
 
     note = NoteCreate(title=title, text=text)
 
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     image_name = None
 
@@ -205,16 +114,16 @@ def update_note(note_id: int,
         if existing_note.id == note_id:
             existing_note.title = note.title
             existing_note.text = note.text
+
             if existing_note.image is not None:
-                path = path_to_images / existing_note.image
-                if path.exists():
-                    path.unlink()
+                delete_image(existing_note.image)
                 existing_note.image = None
+
             if image:
                 image_name = upload_image(image)
                 existing_note.image = image_name
             
-            write_file(path_to_file, notes)
+            write_file(PATH_TO_FILE, notes)
             return existing_note
 
     raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -228,7 +137,7 @@ def patch_note(note_id: int,
     
     note = NoteUpdate(title=title, text=text)
 
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     image_name = None
 
@@ -237,40 +146,42 @@ def patch_note(note_id: int,
 
             if title is not None:
                 existing_note.title = note.title
+
             if text is not None:
                 existing_note.text = note.text
+
             if image:
                 if existing_note.image is not None:
-                    path = path_to_images / existing_note.image
-                    if path.exists():
-                        path.unlink()
+                    delete_image(existing_note.image)
+
                 image_name = upload_image(image)
                 existing_note.image = image_name
             
-            write_file(path_to_file, notes)
+            write_file(PATH_TO_FILE, notes)
             return existing_note
 
     raise HTTPException(status_code=404, detail="Заметка не найдена")
 
 @router.delete("/{note_id}")
 def delete_note(note_id: int):
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     for note in notes:
         if note.id == note_id:
+
             if note.image is not None:
-                path = path_to_images / note.image
-                if path.exists():
-                    path.unlink()
+                delete_image(note.image)
+
             notes.remove(note)
-            write_file(path_to_file, notes)
+            write_file(PATH_TO_FILE, notes)
+
             return {"message": "Заметка удалена"}
         
     raise HTTPException(status_code=404, detail="Заметка не найдена")
 
 @router.delete("/{note_id}/image")
 def delete_note_image(note_id: int):
-    notes = read_file(path_to_file)
+    notes = read_file(PATH_TO_FILE)
 
     for note in notes:
         if note.id == note_id:
@@ -281,17 +192,10 @@ def delete_note_image(note_id: int):
                     detail="У заметки нет изображения"
                 )
             
-            path = path_to_images / note.image
-
-            if not path.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="Файл изображения не найден"
-                )
-            
-            path.unlink()
+            delete_image(note.image)
             note.image = None
-            write_file(path_to_file, notes)
+
+            write_file(PATH_TO_FILE, notes)
 
             return {"message": "Изображение удалено"}
         
