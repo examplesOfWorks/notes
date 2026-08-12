@@ -2,12 +2,16 @@ from fastapi import FastAPI
 import uvicorn
 from routers.notes import router as notes_router
 
+from database import engine
+from models import Base, Note
+
+
 app = FastAPI()
 
 
 app.include_router(notes_router)
 
-
+Base.metadata.create_all(engine)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 
-from schemas.note import Note, NoteCreate, NoteUpdate
-from services.file_service import read_file, write_file
+from models import Note
+from schemas.note import NoteResponse, NoteCreate, NoteUpdate
 from services.image_service import upload_image, delete_image, PATH_TO_IMAGES
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from database import get_session
 
 
 router = APIRouter(
@@ -12,73 +16,79 @@ router = APIRouter(
     tags=["Заметки"],
 )
 
-PATH_TO_FILE = "notes.json"
 
-
-@router.get("/", response_model=list[Note])
-def read_notes(search: str | None = None, limit: int | None = None):
-    notes = read_file(PATH_TO_FILE)
-    result = notes
+@router.get("/", response_model=list[NoteResponse])
+def read_notes(
+    search: str | None = None,
+    limit: int | None = None,
+    session: Session = Depends(get_session)
+):
+    
+    statement = select(Note)
 
     if search:
-        result = [note for note in result if search.lower() in note.title.lower()]
+        statement = statement.where(Note.title.ilike(f"%{search}%"))
     if limit is not None and limit < 1:
         raise HTTPException(status_code=400, detail="Число должно быть больше 0")
     if limit is not None:
-        result = result[:limit]
+        statement = statement.limit(limit)
 
-    return result
+    notes = session.scalars(statement).all()
 
-@router.get("/{note_id}", response_model=Note)
-def read_note(note_id: int):
-    notes = read_file(PATH_TO_FILE)
+    return notes
 
-    for note in notes:
-        if note.id == note_id:
-            return note
+@router.get("/{note_id}", response_model=NoteResponse)
+def read_note(
+    note_id: int,
+    session: Session = Depends(get_session)
+):
+
+    note = session.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+    
+    return note
         
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
 
 @router.get("/{note_id}/image")
-def get_note_image(note_id: int):
-    notes = read_file(PATH_TO_FILE)
+def get_note_image(
+    note_id: int,
+    session: Session = Depends(get_session)
+):
 
-    for note in notes:
-        if note.id == note_id:
+    note = session.get(Note, note_id)
 
-            if note.image is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="У заметки нет изображения"
-                )
+    if note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+
+
+    if note.image is None:
+        raise HTTPException(
+            status_code=404,
+            detail="У заметки нет изображения"
+        )
             
-            path = PATH_TO_IMAGES / note.image
+    path = PATH_TO_IMAGES / note.image
 
-            if not path.exists():
-                raise HTTPException(
-                    status_code=404,
-                    detail="Файл изображения не найден"
-                )
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Файл изображения не найден"
+        )
 
-            return FileResponse(path)
+    return FileResponse(path)
+          
         
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
-        
-@router.post("/", response_model=Note)
+@router.post("/", response_model=NoteResponse)
 def create_note(
     title: str = Form(...),
     text: str = Form(...),
-    image: UploadFile | None = None
+    image: UploadFile | None = None,
+    session: Session = Depends(get_session)
 ):
 
     note = NoteCreate(title=title, text=text)
-
-    notes = read_file(PATH_TO_FILE)
-
-    try:
-        last_id = notes[-1].id
-    except IndexError:
-        last_id = 0
 
     image_name = None
 
@@ -86,118 +96,119 @@ def create_note(
         image_name = upload_image(image)
 
     new_note = Note(
-        id=last_id + 1,
         title=note.title,
         text=note.text,
         image=image_name
     )
-    
-    notes.append(new_note)
-    write_file(PATH_TO_FILE, notes)
+
+    session.add(new_note)
+    session.commit()
+    session.refresh(new_note)
 
     return new_note
 
-@router.put("/{note_id}", response_model=Note)
+@router.put("/{note_id}", response_model=NoteResponse)
 def update_note(note_id: int,
     title: str = Form(...),
     text: str = Form(...),
-    image: UploadFile | None = None
+    image: UploadFile | None = None,
+    session: Session = Depends(get_session)
 ):
 
     note = NoteCreate(title=title, text=text)
 
-    notes = read_file(PATH_TO_FILE)
+    existing_note = session.get(Note, note_id)
 
-    image_name = None
+    if existing_note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
 
-    for existing_note in notes:
-        if existing_note.id == note_id:
-            existing_note.title = note.title
-            existing_note.text = note.text
+    existing_note.title = note.title
+    existing_note.text = note.text
 
-            if existing_note.image is not None:
-                delete_image(existing_note.image)
-                existing_note.image = None
+    if existing_note.image is not None:
+        delete_image(existing_note.image)
+        existing_note.image = None
 
-            if image:
-                image_name = upload_image(image)
-                existing_note.image = image_name
+    if image:
+        image_name = upload_image(image)
+        existing_note.image = image_name
             
-            write_file(PATH_TO_FILE, notes)
-            return existing_note
+    session.commit()
+    return existing_note
 
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
 
-@router.patch("/{note_id}", response_model=Note)
+@router.patch("/{note_id}", response_model=NoteResponse)
 def patch_note(note_id: int, 
     title: str | None = Form(default=None),
     text: str | None = Form(default=None),
-    image : UploadFile | None = None
+    image : UploadFile | None = None,
+    session: Session = Depends(get_session)
 ):
     
     note = NoteUpdate(title=title, text=text)
 
-    notes = read_file(PATH_TO_FILE)
+    existing_note = session.get(Note, note_id)
 
-    image_name = None
+    if existing_note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
 
-    for existing_note in notes:
-        if existing_note.id == note_id:
+    if title is not None:
+        existing_note.title = note.title
 
-            if title is not None:
-                existing_note.title = note.title
+    if text is not None:
+        existing_note.text = note.text
 
-            if text is not None:
-                existing_note.text = note.text
+    if image:
+        if existing_note.image is not None:
+            delete_image(existing_note.image)
 
-            if image:
-                if existing_note.image is not None:
-                    delete_image(existing_note.image)
-
-                image_name = upload_image(image)
-                existing_note.image = image_name
+        image_name = upload_image(image)
+        existing_note.image = image_name
             
-            write_file(PATH_TO_FILE, notes)
-            return existing_note
+    session.commit()
+    return existing_note
 
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
 
 @router.delete("/{note_id}")
-def delete_note(note_id: int):
-    notes = read_file(PATH_TO_FILE)
+def delete_note(
+    note_id: int,
+    session: Session = Depends(get_session)
+):
 
-    for note in notes:
-        if note.id == note_id:
+    note = session.get(Note, note_id)
 
-            if note.image is not None:
-                delete_image(note.image)
+    if note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
 
-            notes.remove(note)
-            write_file(PATH_TO_FILE, notes)
+    if note.image is not None:
+        delete_image(note.image)
 
-            return {"message": "Заметка удалена"}
+    session.delete(note)
+    session.commit()
+
+    return {"message": "Заметка удалена"}
         
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
 
 @router.delete("/{note_id}/image")
-def delete_note_image(note_id: int):
-    notes = read_file(PATH_TO_FILE)
+def delete_note_image(
+    note_id: int,
+    session: Session = Depends(get_session)
+):
 
-    for note in notes:
-        if note.id == note_id:
+    note = session.get(Note, note_id)
 
-            if note.image is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="У заметки нет изображения"
-                )
+    if note is None:
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
+
+    if note.image is None:
+        raise HTTPException(
+            status_code=404,
+            detail="У заметки нет изображения"
+        )
             
-            delete_image(note.image)
-            note.image = None
+    delete_image(note.image)
+    note.image = None
 
-            write_file(PATH_TO_FILE, notes)
+    session.commit()
 
-            return {"message": "Изображение удалено"}
-        
-    raise HTTPException(status_code=404, detail="Заметка не найдена")
-
+    return {"message": "Изображение удалено"}
