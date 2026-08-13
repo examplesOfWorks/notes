@@ -16,7 +16,7 @@ def upload_image(file: UploadFile):
             detail="Файл должен быть JPEG или PNG"
         )
     
-    extention = ".jpg" if file.content_type == "image/jpeg" else ".png"
+    extention = "jpg" if file.content_type == "image/jpeg" else "png"
     file.filename = f"{uuid4()}.{extention}"
 
     path = PATH_TO_IMAGES / file.filename
