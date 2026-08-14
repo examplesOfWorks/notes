@@ -117,44 +117,6 @@ def create_note(
 
         raise
 
-# через with session.begin():
-# @router.post("/", response_model=NoteResponse)
-# def create_note(
-#     title: str = Form(...),
-#     text: str = Form(...),
-#     image: UploadFile | None = None,
-#     session: Session = Depends(get_session)
-# ):
-
-#     image_name = None
-
-#     try:
-    
-#         note = NoteCreate(title=title, text=text)
-
-#         if image:
-#             image_name = upload_image(image)
-
-#         new_note = Note(
-#             title=note.title,
-#             text=note.text,
-#             image=image_name
-#         )
-
-#         with session.begin():
-#             session.add(new_note)
-
-#         session.refresh(new_note)
-
-#         return new_note
-
-#     except Exception:
-
-#         if image_name:
-#             delete_image(image_name)
-
-#         raise 
-
 @router.put("/{note_id}", response_model=NoteResponse)
 def update_note(note_id: int,
     title: str = Form(...),
