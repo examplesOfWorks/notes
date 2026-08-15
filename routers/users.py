@@ -9,8 +9,9 @@ from security import hash_password, verify_password
 from services.auth_service import create_access_token
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from database import get_session
+
+from dependencies import SessionDep
+
 
 router = APIRouter(
     prefix="/users",
@@ -20,7 +21,7 @@ router = APIRouter(
 @router.post("/register", response_model=UserResponse)
 def register_user(
     user: UserCreate,
-    session: Session = Depends(get_session)
+    session: SessionDep,
 ):
     
     try:
@@ -57,8 +58,8 @@ def register_user(
 
 @router.post("/login")
 def login_user(
+    session: SessionDep,
     user: OAuth2PasswordRequestForm = Depends(),
-    session: Session = Depends(get_session)
 ):
     
     statement = select(User).where(

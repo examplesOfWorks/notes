@@ -1,16 +1,16 @@
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 
-from models import Note, User
+from models import Note
 from schemas.note import NoteResponse, NoteCreate, NoteUpdate
-from services.auth_service import get_current_user
+
 from services.image_service import upload_image, delete_image, PATH_TO_IMAGES
-from services.note_service import get_current_note
+
+from dependencies import CurrentNote, CurrentUser, SessionDep
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from database import get_session
+
 
 
 router = APIRouter(
@@ -21,10 +21,10 @@ router = APIRouter(
 
 @router.get("/", response_model=list[NoteResponse])
 def read_notes(
+    current_user: CurrentUser,
+    session: SessionDep,
     search: str | None = None,
     limit: int | None = None,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
 ):
     
     statement = select(Note).where(
@@ -44,7 +44,7 @@ def read_notes(
 
 @router.get("/{note_id}", response_model=NoteResponse)
 def read_note(
-    note: Note = Depends(get_current_note)
+    note: CurrentNote
 ):
     
     return note
@@ -52,7 +52,7 @@ def read_note(
 
 @router.get("/{note_id}/image")
 def get_note_image(
-    note: Note = Depends(get_current_note)
+    note: CurrentNote
 ):
 
     if note.image is None:
@@ -74,11 +74,11 @@ def get_note_image(
 
 @router.post("/", response_model=NoteResponse)
 def create_note(
+    current_user: CurrentUser,
+    session: SessionDep,
     title: str = Form(...),
     text: str = Form(...),
     image: UploadFile | None = None,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
 ):
 
     image_name = None
@@ -113,11 +113,11 @@ def create_note(
 
 @router.put("/{note_id}", response_model=NoteResponse)
 def update_note(
+    existing_note: CurrentNote,
+    session: SessionDep,
     title: str = Form(...),
     text: str = Form(...),
     image: UploadFile | None = None,
-    session: Session = Depends(get_session),
-    existing_note: Note = Depends(get_current_note)
 ):
     
     old_image_name = None
@@ -157,11 +157,11 @@ def update_note(
 
 @router.patch("/{note_id}", response_model=NoteResponse)
 def patch_note(
+    existing_note: CurrentNote,
+    session: SessionDep,
     title: str | None = Form(default=None),
     text: str | None = Form(default=None),
     image : UploadFile | None = None,
-    session: Session = Depends(get_session),
-    existing_note: Note = Depends(get_current_note)
 ):
     old_image_name = None
     new_image_name = None
@@ -201,8 +201,8 @@ def patch_note(
 
 @router.delete("/{note_id}")
 def delete_note(
-    session: Session = Depends(get_session),
-    note: Note = Depends(get_current_note)
+    note: CurrentNote,
+    session: SessionDep,
 ):  
     
     old_image_name = None
@@ -226,8 +226,8 @@ def delete_note(
 
 @router.delete("/{note_id}/image")
 def delete_note_image(
-    session: Session = Depends(get_session),
-    note: Note = Depends(get_current_note)
+    note: CurrentNote,
+    session: SessionDep,
 ):
 
     old_image_name = None
