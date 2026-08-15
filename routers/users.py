@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 
 from models import User
-from schemas.user import UserCreate, UserResponse, UserLogin
+from schemas.user import UserCreate, UserResponse
 
 from security import hash_password, verify_password
+
+from services.auth_service import create_access_token
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,7 +57,7 @@ def register_user(
 
 @router.post("/login")
 def login_user(
-    user: UserLogin,
+    user: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session)
 ):
     
@@ -79,4 +82,9 @@ def login_user(
             detail="Неверное имя пользователя или пароль"
         )
     
-    return {"message": "Вход выполнен"}
+    access_token = create_access_token(existing_user.id)
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }

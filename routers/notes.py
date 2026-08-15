@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 
-from models import Note
+from models import Note, User
 from schemas.note import NoteResponse, NoteCreate, NoteUpdate
+from services.auth_service import get_current_user
 from services.image_service import upload_image, delete_image, PATH_TO_IMAGES
 
 from sqlalchemy import select
@@ -21,10 +22,13 @@ router = APIRouter(
 def read_notes(
     search: str | None = None,
     limit: int | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
     
-    statement = select(Note)
+    statement = select(Note).where(
+        Note.user_id == current_user.id
+    )
 
     if search:
         statement = statement.where(Note.title.ilike(f"%{search}%"))
@@ -40,10 +44,16 @@ def read_notes(
 @router.get("/{note_id}", response_model=NoteResponse)
 def read_note(
     note_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
 
-    note = session.get(Note, note_id)
+    statement = select(Note).where(
+        Note.id == note_id,
+        Note.user_id == current_user.id
+    )
+
+    note = session.scalar(statement)
 
     if note is None:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -54,10 +64,16 @@ def read_note(
 @router.get("/{note_id}/image")
 def get_note_image(
     note_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
 
-    note = session.get(Note, note_id)
+    statement = select(Note).where(
+        Note.id == note_id,
+        Note.user_id == current_user.id
+    )
+
+    note = session.scalar(statement)
 
     if note is None:
         raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -79,13 +95,14 @@ def get_note_image(
 
     return FileResponse(path)
           
-# через try except 
+
 @router.post("/", response_model=NoteResponse)
 def create_note(
     title: str = Form(...),
     text: str = Form(...),
     image: UploadFile | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
 
     image_name = None
@@ -100,7 +117,8 @@ def create_note(
         new_note = Note(
             title=note.title,
             text=note.text,
-            image=image_name
+            image=image_name,
+            user_id=current_user.id
         )
 
         session.add(new_note)
@@ -118,12 +136,15 @@ def create_note(
         raise
 
 @router.put("/{note_id}", response_model=NoteResponse)
-def update_note(note_id: int,
+def update_note(
+    note_id: int,
     title: str = Form(...),
     text: str = Form(...),
     image: UploadFile | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
+    
     old_image_name = None
     new_image_name = None
 
@@ -131,7 +152,12 @@ def update_note(note_id: int,
 
         note = NoteCreate(title=title, text=text)
 
-        existing_note = session.get(Note, note_id)
+        statement = select(Note).where(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+
+        existing_note = session.scalar(statement)
 
         if existing_note is None:
             raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -165,11 +191,13 @@ def update_note(note_id: int,
     
 
 @router.patch("/{note_id}", response_model=NoteResponse)
-def patch_note(note_id: int, 
+def patch_note(
+    note_id: int, 
     title: str | None = Form(default=None),
     text: str | None = Form(default=None),
     image : UploadFile | None = None,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
     old_image_name = None
     new_image_name = None
@@ -178,7 +206,12 @@ def patch_note(note_id: int,
 
         note = NoteUpdate(title=title, text=text)
 
-        existing_note = session.get(Note, note_id)
+        statement = select(Note).where(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+
+        existing_note = session.scalar(statement)
 
         if existing_note is None:
             raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -215,13 +248,20 @@ def patch_note(note_id: int,
 @router.delete("/{note_id}")
 def delete_note(
     note_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):  
     
     old_image_name = None
 
     try:
-        note = session.get(Note, note_id)
+
+        statement = select(Note).where(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+
+        note = session.scalar(statement)
 
         if note is None:
             raise HTTPException(status_code=404, detail="Заметка не найдена")
@@ -244,14 +284,20 @@ def delete_note(
 @router.delete("/{note_id}/image")
 def delete_note_image(
     note_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
 
     old_image_name = None
 
     try:
 
-        note = session.get(Note, note_id)
+        statement = select(Note).where(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+
+        note = session.scalar(statement)
 
         if note is None:
             raise HTTPException(status_code=404, detail="Заметка не найдена")
