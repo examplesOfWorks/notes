@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Cookie
 import jwt
 from datetime import datetime, timedelta, timezone
 
@@ -14,7 +14,7 @@ SECRET_KEY = "some-secret-key"
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/users/login"
+    tokenUrl="/api-users/login"
 )
 
 def create_access_token(user_id: int):
@@ -32,7 +32,7 @@ def create_access_token(user_id: int):
     )
 
 
-def get_current_user(
+def get_current_api_user(
         token: str = Depends(oauth2_scheme),
         session: Session = Depends(get_session)
 ):
@@ -66,6 +66,36 @@ def get_current_user(
             status_code=404,
             detail="Пользователь не найден"
         )
+
+    return user
+
+
+def get_current_web_user(
+    access_token: str | None = Cookie(default=None),
+    session: Session = Depends(get_session)
+):
+    if access_token is None:
+        return None
+    
+    try:
+        payload = jwt.decode(
+            access_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        user_id = payload.get("sub")
+
+        if user_id is None:
+            return None
+
+    except jwt.InvalidTokenError:
+        return None
+
+    user = session.get(User, int(user_id))
+
+    if user is None:
+        return None
 
     return user
 

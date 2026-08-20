@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 
 router = APIRouter(
-    prefix="/notes",
+    prefix="/api_notes",
     tags=["Заметки"],
 )
 

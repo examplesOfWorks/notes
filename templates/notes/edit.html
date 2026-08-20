@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Редактирование заметки
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-body">
+
+            <h2 class="card-title mb-4">
+                Редактирование заметки
+            </h2>
+
+            <form method="post" action="/notes/{{ note.id }}/edit" enctype="multipart/form-data">
+
+                <div class="mb-3">
+                    <label for="title" class="form-label">
+                        Название
+                    </label>
+
+                    <input type="text" id="title" name="title" value="{{ note.title }}" class="form-control">
+                </div>
+
+                <div class="mb-3">
+                    <label for="text" class="form-label">
+                        Текст
+                    </label>
+
+                    <textarea id="text" name="text" class="form-control" rows="6">{{ note.text }}</textarea>
+                </div>
+
+                <div class="mb-4">
+
+                    {% if note.image %}
+                        <label for="image" class="form-label">
+                            Заменить текущее изображение
+                        </label>
+                    {% else %}
+                        <label for="image" class="form-label">
+                            Добавить изображение
+                        </label>
+                    {% endif %}
+
+                    <input type="file" id="image" name="image" class="form-control" accept="image/jpeg,image/png">
+
+                    <div class="form-text">
+                        Изображение необязательно.
+                    </div>
+
+                </div>
+
+                <div class="d-flex gap-2">
+
+                    <button type="submit" class="btn btn-primary">
+                        Сохранить изменения
+                    </button>
+
+                    <a href="/notes/{{ note.id }}" class="btn btn-outline-secondary">
+                        Отмена
+                    </a>
+
+                </div>
+
+            </form>
+
+            {% if note.image %}
+
+                <hr class="my-4">
+
+                <h5 class="mb-3">
+                    Текущее изображение
+                </h5>
+
+                <div class="mb-3">
+                    <img src="/notes/{{ note.id }}/image" alt="Изображение заметки" class="img-fluid rounded" style="max-width: 300px;">
+                </div>
+
+                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                    Удалить изображение
+                </button>
+
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    Удаление изображения
+                </h5>
+
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+
+            <div class="modal-body">
+                Вы уверены, что хотите удалить это изображение?
+            </div>
+
+            <div class="modal-footer">
+
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Отмена
+                </button>
+
+                <form method="post" action="/notes/{{ note.id }}/image/delete">
+                    <button type="submit" class="btn btn-danger">
+                        Удалить
+                    </button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -14,7 +14,7 @@ from dependencies import SessionDep
 
 
 router = APIRouter(
-    prefix="/users",
+    prefix="/api-users",
     tags=["Пользователи"],
 )
 

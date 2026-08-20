@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Главная
+{% endblock %}
+
+{% block content %}
+
+<h1>Добро пожаловать!</h1>
+
+<p>
+    Это приложение для хранения заметок.
+    <br>
+    Для работы с заметками необходимо <a href="/login/">войти</a> или <a href="/register/">зарегистрироваться</a>.
+</p>
+
+{% if current_user %}
+    <a href="/notes/" class="btn btn-primary">
+        Мои заметки
+    </a>
+{% endif %}
+
+{% endblock %}

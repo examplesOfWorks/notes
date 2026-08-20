@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Создание заметки
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-body">
+
+            <h2 class="card-title mb-4">
+                Создание заметки
+            </h2>
+
+            {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="post" action="/notes/create" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="title" class="form-label">
+                        Название
+                    </label>
+
+                    <input type="text" id="title" name="title" class="form-control" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="text" class="form-label">
+                        Текст заметки
+                    </label>
+
+                    <textarea id="text" name="text" class="form-control" rows="6" required></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label for="image" class="form-label">
+                        Изображение
+                    </label>
+
+                    <input type="file" id="image" name="image" class="form-control" accept="image/jpeg,image/png">
+
+                    <div class="form-text">
+                        Изображение необязательно.
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        Создать заметку
+                    </button>
+
+                    <a href="/notes/" class="btn btn-outline-secondary">
+                        Отмена
+                    </a>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
